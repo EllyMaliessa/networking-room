@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IMS613 - 3D Networking Room</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; background: #101827; color: #f8fafc; }
+  #scene { position: fixed; inset: 0; }
+  #panel {
+    position: fixed; top: 18px; left: 18px; width: min(330px, calc(100vw - 36px));
+    padding: 16px 18px; border: 1px solid #475569; border-radius: 14px;
+    background: rgba(15, 23, 42, .91); backdrop-filter: blur(8px); z-index: 5;
+    box-shadow: 0 12px 35px rgba(0,0,0,.3);
+  }
+  h1 { font-size: 19px; margin: 0 0 7px; }
+  #panel p { color: #cbd5e1; font-size: 12px; line-height: 1.5; margin: 0 0 12px; }
+  .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 10px; font-size: 11px; color: #e2e8f0; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:6px; }
+  #controls { position:fixed; right:18px; top:18px; z-index:5; display:flex; flex-direction:column; gap:8px; }
+  button {
+    border:1px solid #64748b; background:rgba(15,23,42,.92); color:white; border-radius:9px;
+    padding:10px 13px; cursor:pointer; font-size:12px;
+  }
+  button:hover { background:#334155; }
+  #info {
+    position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:5;
+    width:min(560px, calc(100vw - 28px)); padding:12px 16px; border-radius:12px;
+    background:rgba(15,23,42,.93); border:1px solid #475569; text-align:center;
+    color:#e2e8f0; font-size:12px; line-height:1.5; pointer-events:none;
+  }
+  #info strong { color:#fff; font-size:14px; display:block; margin-bottom:3px; }
+  .tag {
+    color:white; background:rgba(15,23,42,.9); border:1px solid #94a3b8; border-radius:5px;
+    padding:3px 6px; font: bold 10px Arial; white-space:nowrap; pointer-events:none;
+  }
+  #loading { position:fixed; inset:0; display:grid; place-items:center; background:#101827; z-index:10; }
+  @media(max-width:600px) { #panel { top:10px; left:10px; padding:12px; } #controls { top:auto; bottom:100px; right:10px; } #info { bottom:10px; } }
+</style>
+</head>
+<body>
+<div id="loading">Loading 3D Networking Room...</div>
+<div id="scene"></div>
+<section id="panel">
+  <h1>NETWORKING ROOM</h1>
+  <p>IMS613 Individual Assignment · Interactive 3D room concept<br>Drag to rotate · Scroll to zoom · Right-click to pan · Select equipment for details.</p>
+  <div class="legend">
+    <div><span class="dot" style="background:#2563eb"></span>Network racks</div>
+    <div><span class="dot" style="background:#16a34a"></span>Network devices</div>
+    <div><span class="dot" style="background:#f59e0b"></span>Power / UPS</div>
+    <div><span class="dot" style="background:#dc2626"></span>Safety / security</div>
+  </div>
+</section>
+<div id="controls">
+  <button id="overview">Overview</button>
+  <button id="front">Front view</button>
+  <button id="labels">Hide labels</button>
+  <button id="tour">Start 360° rotation</button>
+</div>
+<div id="info"><strong>Welcome to the Networking Room</strong>Click any equipment to learn about its function.</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9db1c5);
+scene.fog = new THREE.Fog(0x9db1c5, 22, 48);
+
+const camera = new THREE.PerspectiveCamera(48, innerWidth/innerHeight, 0.1, 100);
+camera.position.set(13, 10, 16);
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+document.querySelector('#scene').appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(innerWidth, innerHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0';
+labelRenderer.domElement.style.pointerEvents = 'none';
+document.querySelector('#scene').appendChild(labelRenderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 2, 0);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.minDistance = 7;
+controls.maxDistance = 30;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x64748b, 2.0));
+const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+keyLight.position.set(-7, 14, 9); keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048,2048); scene.add(keyLight);
+const fill = new THREE.PointLight(0x9bc7ff, 65, 24); fill.position.set(5,7,-5); scene.add(fill);
+
+const materials = {
+  wall: new THREE.MeshStandardMaterial({color:0xdce5ed, roughness:.85}),
+  floor: new THREE.MeshStandardMaterial({color:0x64748b, roughness:.8}),
+  dark: new THREE.MeshStandardMaterial({color:0x172033, metalness:.45, roughness:.45}),
+  rack: new THREE.MeshStandardMaterial({color:0x263449, metalness:.55, roughness:.42}),
+  blue: new THREE.MeshStandardMaterial({color:0x2563eb, metalness:.25, roughness:.45}),
+  green: new THREE.MeshStandardMaterial({color:0x15803d, metalness:.25, roughness:.4}),
+  amber: new THREE.MeshStandardMaterial({color:0xf59e0b, metalness:.2, roughness:.45}),
+  red: new THREE.MeshStandardMaterial({color:0xb91c1c, metalness:.15, roughness:.45}),
+  glass: new THREE.MeshStandardMaterial({color:0x93c5fd, transparent:true, opacity:.18, roughness:.15}),
+  white: new THREE.MeshStandardMaterial({color:0xf8fafc, roughness:.55})
+};
+const room = new THREE.Group(); scene.add(room);
+function box(parent, name, x,y,z, w,h,d, mat, info='', clickable=true) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+  mesh.position.set(x,y,z); mesh.castShadow=true; mesh.receiveShadow=true; mesh.name=name;
+  mesh.userData.info=info; parent.add(mesh);
+  if(clickable && info) clickableObjects.push(mesh);
+  return mesh;
+}
+const clickableObjects=[];
+function label(text,x,y,z) {
+  const el=document.createElement('div'); el.className='tag'; el.textContent=text;
+  const obj=new CSS2DObject(el); obj.position.set(x,y,z); room.add(obj); return obj;
+}
+
+// Room shell: 14m x 10m concept, open front and roof for visibility.
+box(room,'Floor',0,-.18,0,14,.35,10,materials.floor,'Raised access floor provides an organized route for network and power cabling.',false);
+box(room,'Back wall',0,3.2,-5,14,6.4,.25,materials.wall,'',false);
+box(room,'Left wall',-7,3.2,0,.25,6.4,10,materials.wall,'',false);
+box(room,'Right wall',7,3.2,0,.25,6.4,10,materials.wall,'',false);
+box(room,'Ceiling',0,6.45,0,14,.2,10,materials.white,'Ceiling-mounted lighting and cable containment.',false);
+// wall trim
+for(let x=-6.5;x<=6.5;x+=1) box(room,'Wall panel',x,3.2,-4.86,.025,5.8,.02,materials.white,'',false);
+// ceiling lights
+for(let x=-4.5;x<=4.6;x+=3) {
+  box(room,'LED ceiling light',x,6.28,0,.95,.08,.22,materials.white,'LED lighting provides clear visibility for maintenance.',false);
+}
+// cable trays overhead
+box(room,'Overhead cable tray',0,5.65,-2.5,11,.12,.28,materials.dark,'Cable trays keep network cables organized and separated from power cables.',false);
+box(room,'Overhead cable tray',-4,5.65,0,.25,.12,5,materials.dark,'Cable trays route network cables neatly above the equipment.',false);
+box(room,'Overhead cable tray',4,5.65,0,.25,.12,5,materials.dark,'Cable trays route network cables neatly above the equipment.',false);
+
+// Raised floor tiles
+for(let x=-6.25;x<=6.25;x+=1.25) for(let z=-4.25;z<=4.25;z+=1.25) {
+  const line=new THREE.Mesh(new THREE.BoxGeometry(1.22,.012,1.22),new THREE.MeshStandardMaterial({color:0x94a3b8,roughness:.9}));
+  line.position.set(x,.005,z); room.add(line);
+}
+
+// Three equipment racks in the central area
+function makeRack(x,z,index) {
+  const g=new THREE.Group(); g.position.set(x,0,z); room.add(g);
+  box(g,'Rack frame',0,2.15,0,1.55,4.3,1.25,materials.rack,
+    '19-inch network rack: securely houses switches, routers, patch panels and other network equipment.');
+  // front door/glass and side rails
+  box(g,'Rack front glass',0,2.15,.64,1.42,4.08,.035,materials.glass,'Transparent rack door allows visual inspection while restricting physical access.');
+  for(let yy=.35;yy<4.2;yy+=.35) {
+    box(g,'Rack ventilation slot',-.58,yy,.67,.34,.035,.018,materials.dark,'Ventilation slots support airflow through the rack.',false);
+    box(g,'Rack ventilation slot',.58,yy,.67,.34,.035,.018,materials.dark,'Ventilation slots support airflow through the rack.',false);
+  }
+  // stacked network devices on rack front
+  const devices=[
+    {y:3.75,n:'Patch Panel',c:materials.blue,desc:'Patch panel terminates and organizes Ethernet cables. It makes connections between structured cabling and network switches easier to manage.'},
+    {y:3.25,n:'Core Switch',c:materials.green,desc:'Core switch connects network segments and forwards data at high speed within the organization network.'},
+    {y:2.72,n:'Access Switch',c:materials.green,desc:'Access switch connects end-user devices such as computers, printers, wireless access points and IP phones.'},
+    {y:2.18,n:'Router',c:materials.blue,desc:'Router forwards packets between different networks and connects the local network to external networks.'},
+    {y:1.62,n:'Firewall',c:materials.red,desc:'Firewall monitors and filters incoming and outgoing network traffic based on configured security rules.'},
+    {y:1.05,n:'Fiber Optic Panel',c:materials.blue,desc:'Fiber optic distribution panel organizes fiber connections and supports high-speed backbone links.'}
+  ];
+  devices.forEach((d,i)=>{
+    box(g,d.n,0,d.y,.69,1.25,.28,.12,d.c,d.desc);
+    for(let k=0;k<7;k++) box(g,'Port indicator',-.48+k*.16,d.y,.765,.045,.045,.018,
+      new THREE.MeshStandardMaterial({color:k%3===0?0x22c55e:0x38bdf8,emissive:k%3===0?0x14532d:0x075985,emissiveIntensity:.4}),'',false);
+  });
+  label('NETWORK RACK '+index,x,4.55,z+.8);
+}
+makeRack(-3.6,-1.8,01); makeRack(0,-1.8,02); makeRack(3.6,-1.8,03);
+
+// UPS and power distribution at back-right
+box(room,'UPS cabinet',5.45,1.25,-3.75,1.25,2.5,1.0,materials.amber,
+  'UPS provides temporary backup power and protects network equipment from short power interruptions.');
+label('UPS BACKUP',5.45,2.75,-3.1);
+box(room,'Power distribution unit',5.4,3.25,-2.9,.7,1.8,.35,materials.dark,
+  'Power Distribution Unit (PDU) distributes electrical power to devices inside the network racks.');
+label('PDU',5.4,4.25,-2.65);
+
+// Cooling unit
+box(room,'Precision cooling unit',-5.45,1.5,-3.8,1.5,3,1.1,materials.white,
+  'Dedicated cooling unit removes heat and maintains a suitable temperature for reliable operation of network equipment.');
+for(let i=0;i<5;i++) box(room,'Cooling vent',-5.45,.55+i*.42,-3.22,1.05,.09,.025,materials.blue,'Cooling vents circulate conditioned air.',false);
+label('COOLING UNIT',-5.45,3.2,-3.1);
+
+// Security at entrance/front-right
+box(room,'Access control reader',6.82,1.5,3.2,.12,.45,.2,materials.red,
+  'Card or biometric access control restricts entry to authorized IT personnel only.');
+label('ACCESS CONTROL',6.3,2.05,3.2);
+box(room,'CCTV camera',5.9,5.75,4.45,.35,.2,.35,materials.dark,
+  'CCTV camera monitors the room and records activity for security purposes.');
+label('CCTV',5.9,6.05,4.45);
+box(room,'Fire suppression cylinder',-5.5,1.1,3.65,.55,2.1,.55,materials.red,
+  'Clean-agent fire suppression system is designed to control fire while reducing damage to sensitive electronic equipment.');
+label('FIRE SUPPRESSION',-5.5,2.35,4.0);
+
+// Door frame at front-left
+box(room,'Door left frame',-5.8,1.5,4.9,.18,3,.18,materials.dark,'',false);
+box(room,'Door right frame',-3.5,1.5,4.9,.18,3,.18,materials.dark,'',false);
+box(room,'Door header',-4.65,2.95,4.9,2.45,.18,.18,materials.dark,'',false);
+box(room,'Door leaf',-5.65,1.4,4.82,.12,2.65,.08,materials.blue,'Controlled entrance door helps prevent unauthorized physical access.',false);
+label('CONTROLLED ENTRY',-4.65,3.35,4.8);
+
+// Workbench and monitoring screen
+box(room,'Maintenance desk',-4.8,.65,1.2,2.7,.18,1.15,materials.dark,'Maintenance desk is used by technicians for equipment checks and cable documentation.');
+box(room,'Desk leg',-5.85,.3,.8,.12,.65,.12,materials.rack,'',false);
+box(room,'Desk leg',-3.75,.3,.8,.12,.65,.12,materials.rack,'',false);
+box(room,'Monitoring monitor',-4.8,1.55,.75,1.45,.9,.12,materials.dark,
+  'Monitoring workstation displays network status, device alerts, bandwidth usage and troubleshooting information.');
+box(room,'Monitor screen',-4.8,1.55,.675,1.3,.72,.025,new THREE.MeshStandardMaterial({color:0x0f766e,emissive:0x064e3b,emissiveIntensity:.5}),
+  'Network monitoring dashboard provides visibility of device availability and network performance.',false);
+label('TECHNICIAN WORKSTATION',-4.8,2.15,.7);
+
+// Fire alarm and emergency light
+box(room,'Fire alarm',-6.82,4.8,-4.35,.08,.35,.25,materials.red,'Fire alarm alerts personnel when smoke or fire is detected.');
+box(room,'Emergency light',6.82,5.2,4.2,.1,.25,.4,materials.amber,'Emergency lighting supports safe evacuation during power failure.',false);
+
+// Small Wi-Fi access point demo on wall
+box(room,'Wireless access point',2.6,4.8,-4.78,.55,.16,.25,materials.white,
+  'Wireless access point provides Wi-Fi connectivity for authorized wireless devices.');
+label('WIRELESS AP',2.6,5.15,-4.55);
+
+// Selectable information
+const raycaster=new THREE.Raycaster(), mouse=new THREE.Vector2();
+const info=document.querySelector('#info');
+renderer.domElement.addEventListener('click',e=>{
+  const r=renderer.domElement.getBoundingClientRect();
+  mouse.x=((e.clientX-r.left)/r.width)*2-1; mouse.y=-((e.clientY-r.top)/r.height)*2+1;
+  raycaster.setFromCamera(mouse,camera);
+  const hits=raycaster.intersectObjects(clickableObjects,true);
+  if(hits.length){
+    let obj=hits[0].object;
+    while(obj && !obj.userData.info) obj=obj.parent;
+    if(obj && obj.userData.info) info.innerHTML='<strong>'+obj.name+'</strong>'+obj.userData.info;
+  }
+});
+
+let showLabels=true, rotating=false;
+document.querySelector('#labels').onclick=()=>{
+  showLabels=!showLabels;
+  labelRenderer.domElement.style.display=showLabels?'':'none';
+  document.querySelector('#labels').textContent=showLabels?'Hide labels':'Show labels';
+};
+document.querySelector('#overview').onclick=()=>{
+  camera.position.set(13,10,16); controls.target.set(0,2,0); controls.update();
+};
+document.querySelector('#front').onclick=()=>{
+  camera.position.set(0,5,19); controls.target.set(0,2,0); controls.update();
+};
+document.querySelector('#tour').onclick=()=>{
+  rotating=!rotating;
+  document.querySelector('#tour').textContent=rotating?'Stop 360° rotation':'Start 360° rotation';
+};
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight); labelRenderer.setSize(innerWidth,innerHeight);
+});
+document.querySelector('#loading').remove();
+function animate(){
+  requestAnimationFrame(animate);
+  if(rotating){ const offset=camera.position.clone().sub(controls.target); offset.applyAxisAngle(new THREE.Vector3(0,1,0),.0025); camera.position.copy(controls.target).add(offset); }
+  controls.update(); renderer.render(scene,camera); labelRenderer.render(scene,camera);
+}
+animate();
+</script>
+</body>
+</html>
